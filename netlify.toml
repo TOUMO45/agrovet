@@ -1,0 +1,31 @@
+# Netlify deploy config for the Vite + React SPA.
+[build]
+  command = "npm run build"
+  publish = "dist"
+
+[build.environment]
+  NODE_VERSION = "20"
+
+# Serverless SMS sender (netlify/functions/send-sms.js). Reachable at
+# /.netlify/functions/send-sms once the SMS_* env vars are set in the Netlify UI.
+[functions]
+  directory = "netlify/functions"
+  node_bundler = "esbuild"
+
+# Client-side routing: every unknown path serves index.html (real files —
+# assets, sw.js, manifest.webmanifest — are matched first and served as-is).
+[[redirects]]
+  from = "/*"
+  to = "/index.html"
+  status = 200
+
+# Never cache the service worker or the app shell.
+[[headers]]
+  for = "/sw.js"
+  [headers.values]
+    Cache-Control = "public, max-age=0, must-revalidate"
+
+[[headers]]
+  for = "/index.html"
+  [headers.values]
+    Cache-Control = "public, max-age=0, must-revalidate"

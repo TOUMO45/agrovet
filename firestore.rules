@@ -1,0 +1,35 @@
+rules_version = '2';
+
+// Baseline rules: any signed-in user can read/write the shared shop data.
+// This app is single-workspace by design (everyone sees the same order list).
+// Deploy with:  firebase deploy --only firestore:rules
+service cloud.firestore {
+  match /databases/{database}/documents {
+
+    function signedIn() {
+      return request.auth != null;
+    }
+
+    match /activeOrders/{id} {
+      allow read, write: if signedIn();
+    }
+
+    match /archivedOrders/{id} {
+      allow read, write: if signedIn();
+    }
+
+    match /priceHistory/{id} {
+      allow read, create: if signedIn();
+      allow update, delete: if false; // history is append-only
+    }
+
+    match /settings/{id} {
+      allow read, write: if signedIn();
+    }
+
+    // Deny everything else by default.
+    match /{document=**} {
+      allow read, write: if false;
+    }
+  }
+}
