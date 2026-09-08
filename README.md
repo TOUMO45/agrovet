@@ -8,10 +8,11 @@ compiled bundle.
 
 ## License
 
-Source-available under the **[PolyForm Noncommercial License 1.0.0](LICENSE)**.
-Non-commercial use (personal, educational, research, non-profit) is free.
-**Commercial use requires prior written permission from the copyright holder** —
-open an issue on this repository to request a commercial license.
+Copyright (c) 2026 **Kamari Fatima Zohra**. Source-available under the
+**[PolyForm Noncommercial License 1.0.0](LICENSE)**. Non-commercial use
+(personal, educational, research, non-profit) is free. **Commercial use requires
+prior written permission from the copyright holder** — open an issue on this
+repository to request a commercial license.
 
 ---
 
@@ -143,8 +144,8 @@ Sending — the dialog picks the best available path automatically:
    personalised message** with a live progress list.
 2. **إرسال إلى الكل (from your phone)** — when the owner set up **httpSMS** in
    **الإعدادات** (or inline in the dialog). Free open-source Android app that sends
-   through the phone's own SIM; its API allows direct browser calls. Free tier
-   ~200 msg/month; self-host its server for unlimited.
+   through the phone's own SIM; its API allows direct browser calls. Its hosted
+   free tier is only ~200 msg/month; self-host its server for unlimited.
 3. **واتساب** — always available, no account or key: a stepper opens each client's
    message in WhatsApp (`https://wa.me/…?text=`); you tap send, then "التالي".
    Long messages arrive as one WhatsApp message instead of several SMS.
@@ -159,15 +160,25 @@ Invalid / duplicate numbers are detected and skipped. `src/services/smsGateway.j
 
 `netlify/functions/send-sms.js` ships with the site. Set these in **Netlify →
 Site configuration → Environment variables**, then redeploy — after that nobody
-needs to touch httpSMS on a phone:
+needs to set up a gateway on a phone by hand:
 
 | Var | Notes |
 |---|---|
-| `SMS_PROVIDER` | `httpsms` (default) or `twilio` |
+| `SMS_PROVIDER` | `smsgate` (default) · `httpsms` · `twilio` |
 | `FIREBASE_API_KEY` | same value as `VITE_FIREBASE_API_KEY`; used only to check the caller is a signed-in Agrovet user |
 | `SMS_ALLOWED_EMAILS` | optional comma-separated allow-list of sender accounts |
-| `HTTPSMS_API_KEY`, `HTTPSMS_FROM` | provider `httpsms`; `HTTPSMS_FROM` in E.164, e.g. `+213661234567` |
+| `SMSGATE_USERNAME`, `SMSGATE_PASSWORD` | provider `smsgate` — from the *SMS Gateway for Android* app (sms-gate.app), Cloud server credentials. `SMSGATE_BASE_URL` optional (self-hosted server) |
+| `HTTPSMS_API_KEY`, `HTTPSMS_FROM` | provider `httpsms`; `HTTPSMS_FROM` in E.164, e.g. `+213661234567`. `HTTPSMS_BASE_URL` optional (self-hosted) |
 | `TWILIO_ACCOUNT_SID`, `TWILIO_AUTH_TOKEN`, `TWILIO_FROM` | provider `twilio`; `TWILIO_FROM` is a number in E.164 or a Messaging Service SID |
+
+**Which provider?** All three send from a real SIM (so each message still costs
+your normal SMS credit) except Twilio (paid, cloud numbers).
+
+| Provider | Free allowance | Needs |
+|---|---|---|
+| **`smsgate`** (SMS Gateway for Android) | **free public cloud, no monthly cap** (soft ~10k/day) | the app on an Android phone |
+| `httpsms` | ~200 msg/month hosted; unlimited if self-hosted | the app on an Android phone |
+| `twilio` | trial credit only, then ~$0.05/SMS | a paid Twilio account |
 
 `GET /.netlify/functions/send-sms` returns `{ configured, provider }` — the app
 uses it to decide whether to show the one-tap button or the fallbacks. With no

@@ -8,14 +8,21 @@
  *
  * ── Configure in Netlify → Site configuration → Environment variables ──────────
  *
- *   SMS_PROVIDER        "httpsms" (default) | "twilio"
+ *   SMS_PROVIDER        "smsgate" (default) | "httpsms" | "twilio"
  *   FIREBASE_API_KEY    your Firebase Web API key (same value as
  *                       VITE_FIREBASE_API_KEY) — used only to check the caller
  *                       is a signed-in Agrovet user.
  *   SMS_ALLOWED_EMAILS  optional, comma-separated allow-list. When set, only
  *                       those signed-in accounts may send.
  *
- *   # provider "httpsms" — free, sends from your own SIM via the httpSMS app
+ *   # provider "smsgate" — SMS Gateway for Android (sms-gate.app). Free public
+ *   # cloud server, no monthly cap; sends from your own SIM. Best free option.
+ *   SMSGATE_USERNAME     shown in the app (Cloud server → credentials)
+ *   SMSGATE_PASSWORD
+ *   SMSGATE_BASE_URL     optional, default https://api.sms-gate.app/3rdparty/v1
+ *
+ *   # provider "httpsms" — httpsms.com. Free tier only 200 msg/month; self-host
+ *   # its server for unlimited (set HTTPSMS_BASE_URL to your server).
  *   HTTPSMS_API_KEY
  *   HTTPSMS_FROM        your number in E.164, e.g. +213661234567
  *   HTTPSMS_BASE_URL    optional, default https://api.httpsms.com
@@ -48,7 +55,11 @@ function providerConfigured(provider) {
       process.env.TWILIO_ACCOUNT_SID && process.env.TWILIO_AUTH_TOKEN && process.env.TWILIO_FROM,
     )
   }
-  return Boolean(process.env.HTTPSMS_API_KEY && process.env.HTTPSMS_FROM)
+  if (provider === 'httpsms') {
+    return Boolean(process.env.HTTPSMS_API_KEY && process.env.HTTPSMS_FROM)
+  }
+  // smsgate (default)
+  return Boolean(process.env.SMSGATE_USERNAME && process.env.SMSGATE_PASSWORD)
 }
 
 /** Algerian mobile in any form → E.164 (+213…), or '' if it isn't one. */
@@ -105,6 +116,32 @@ async function sendHttpsms(to, content) {
   return data?.data?.id || data?.id || null
 }
 
+async function sendSmsgate(to, content) {
+  const base = (process.env.SMSGATE_BASE_URL || 'https://api.sms-gate.app/3rdparty/v1').replace(
+    /\/$/,
+    '',
+  )
+  const auth = Buffer.from(
+    `${process.env.SMSGATE_USERNAME}:${process.env.SMSGATE_PASSWORD}`,
+  ).toString('base64')
+  const res = await fetch(`${base}/messages`, {
+    method: 'POST',
+    headers: { 'content-type': 'application/json', authorization: `Basic ${auth}` },
+    body: JSON.stringify({ textMessage: { text: content }, phoneNumbers: [to] }),
+  })
+  const data = await res.json().catch(() => ({}))
+  if (!res.ok) {
+    const m =
+      res.status === 401
+        ? 'بيانات دخول SMS Gateway غير صحيحة في إعدادات الخادم'
+        : res.status === 429
+          ? 'تجاوز الخادم حد الإرسال المؤقّت — أعد المحاولة بعد قليل'
+          : data.message || `فشل الإرسال (${res.status})`
+    throw new Error(typeof m === 'string' ? m : 'فشل الإرسال')
+  }
+  return data.id || null
+}
+
 async function sendTwilio(to, content) {
   const sid = process.env.TWILIO_ACCOUNT_SID
   const from = process.env.TWILIO_FROM
@@ -126,7 +163,7 @@ async function sendTwilio(to, content) {
 }
 
 export const handler = async (event) => {
-  const provider = (process.env.SMS_PROVIDER || 'httpsms').toLowerCase()
+  const provider = (process.env.SMS_PROVIDER || 'smsgate').toLowerCase()
 
   if (event.httpMethod === 'OPTIONS') return { statusCode: 204, headers: CORS, body: '' }
   if (event.httpMethod === 'GET') {
@@ -152,8 +189,10 @@ export const handler = async (event) => {
   if (!to) return json(400, { ok: false, error: 'رقم غير صالح' })
   if (!content) return json(400, { ok: false, error: 'نص الرسالة فارغ' })
 
+  const send =
+    provider === 'twilio' ? sendTwilio : provider === 'httpsms' ? sendHttpsms : sendSmsgate
   try {
-    const id = provider === 'twilio' ? await sendTwilio(to, content) : await sendHttpsms(to, content)
+    const id = await send(to, content)
     return json(200, { ok: true, id })
   } catch (err) {
     return json(502, { ok: false, error: err.message || 'فشل الإرسال' })
