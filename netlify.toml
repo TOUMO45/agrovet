@@ -5,6 +5,11 @@
 
 [build.environment]
   NODE_VERSION = "20"
+  # These VITE_FIREBASE_* values are public by design — Vite inlines them into
+  # the client bundle on every build, and Firebase Web config is not a secret
+  # (access is enforced by Firestore rules + Auth, not by hiding this key).
+  # Without this, Netlify's secrets scanner fails the build on a false positive.
+  SECRETS_SCAN_OMIT_KEYS = "VITE_FIREBASE_API_KEY,VITE_FIREBASE_AUTH_DOMAIN,VITE_FIREBASE_PROJECT_ID,VITE_FIREBASE_STORAGE_BUCKET,VITE_FIREBASE_MESSAGING_SENDER_ID,VITE_FIREBASE_APP_ID"
 
 # Serverless SMS sender (netlify/functions/send-sms.js). Reachable at
 # /.netlify/functions/send-sms once the SMS_* env vars are set in the Netlify UI.
