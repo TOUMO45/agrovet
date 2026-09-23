@@ -1,7 +1,10 @@
 # أغروفيت – إدارة طلبات الكتاكيت (Agrovet – Chick Orders)
 
-Arabic (RTL) dashboard for taking customer **pre-orders of day-old chicks**, with a
-single live **price per chick**, a confirm workflow, archiving, and Excel export.
+Arabic (RTL) **stock-management** dashboard for a day-old-chick business: customer
+orders with a live **price per chick** (global or per-client), a one-tap **"تم البيع"
+(Sell Done)** step that cuts stock and books revenue, a dedicated **Sales** page, an
+**Stock** page with a full movement ledger and low-stock alerts, archiving, bulk
+client SMS, and Excel export.
 
 This is the **rebuilt, editable source** of an app that previously existed only as a
 compiled bundle.
@@ -62,18 +65,42 @@ npm run preview   # serve the build locally
 
 | Collection | Doc fields |
 |---|---|
-| `activeOrders` | `customerName, phoneNumber, quantity, unitPrice, totalPrice, notes, confirmed, createdBy, createdByName, timestamp` |
+| `activeOrders` | `customerName, phoneNumber, quantity, unitPrice, totalPrice, notes, confirmed, priceOverridden, createdBy, createdByName, timestamp` |
 | `archivedOrders` | same + `archivedAt` |
+| `soldOrders` | same + `soldAt, soldByName, originalOrderId` (`timestamp` = original order time) |
+| `stockMovements` | `type` (`restock` \| `sale` \| `adjust` \| `return`), `delta`, `balanceAfter`, `note`, `ref` (customer), `orderId`, `createdByName`, `timestamp` — append-only |
 | `priceHistory` | `price, timestamp` (append-only log of every price change) |
 | `settings/currentPrice` | `price, updatedAt` |
+| `settings/stock` | `available, lowThreshold, updatedAt` |
 
 ## Pricing rules
 
 - New order: `unitPrice = currentPrice`, `totalPrice = quantity × unitPrice`.
-- While an order is **not confirmed**, changing the global price updates it too
-  (one batched write, only for orders that are actually out of date).
-- **Confirming** an order **locks** its `unitPrice`; later price changes don't touch it.
+- While an order is **not confirmed** and has **no custom price**, changing the
+  global price updates it too (one batched write, only for stale orders).
+- **سعر مخصّص** (per-client price) — set from the order form or the quick
+  **تعديل السعر** dialog; sets `priceOverridden` so the global-price sync leaves it
+  alone. Can be reset back to the global price.
+- Marking an order **جاهز** (ready) **locks** its `unitPrice`; later price changes
+  don't touch it.
 - Archived orders are fully frozen.
+
+## Sell / stock workflow
+
+- **تم البيع (Sell Done)** on an order runs one Firestore transaction: freeze the
+  unit price → `available -= quantity` → append a `sale` movement → move the order
+  into `soldOrders` → delete it from `activeOrders`. Selling below available stock
+  is allowed (balance goes negative, flagged red) so a backorder is never blocked.
+- **المبيعات (Sales page)** — every sold order, with today / 7d / 30d / all range
+  filter, revenue + average-sale KPIs, name search, Excel export, and per-row
+  **إرجاع** (reverses the transaction: restock + back to orders) or **حذف السجل**
+  (drops the record only, stock untouched).
+- **المخزون (Stock page)** — current balance with a low-stock alert, **إضافة مخزون**
+  (restock) and **تعديل الرصيد** (set exact, logs the diff), an editable alert
+  threshold, and the full `stockMovements` ledger (±delta, running balance, who /
+  when).
+- **الإيرادات المحقّقة** on the dashboard = Σ `soldOrders.totalPrice`; the pending
+  KPI = Σ `activeOrders.totalPrice`.
 
 ## What changed from the old build
 
@@ -87,8 +114,13 @@ npm run preview   # serve the build locally
   is now a single guarded batched write that runs only when the price changes.
 
 **Enhancements**
+- Full **stock management**: stock balance, `stockMovements` ledger, restock /
+  manual adjust, low-stock alert, and a **Sell Done** transaction that ties an
+  order → stock cut → revenue → Sales page (see *Sell / stock workflow*).
+- **Per-client price** override with a quick edit dialog, separate from the global
+  price and its auto-sync.
 - Offline-first Firestore cache (works on a weak connection, syncs on reconnect).
-- Status filter (all / confirmed / pending) next to the name search.
+- Status filter (الكل / منتظر / جاهز) next to the name search.
 - "Select all" checkbox in the table header.
 - Money shown with thousands separators (`12 345 د.ج`).
 - Confirmed orders keep their price; only pending orders follow the current price.
@@ -105,9 +137,12 @@ npm run preview   # serve the build locally
   `ConfirmProvider` (replaces `window.confirm`).
 - **KPI row** reads like a price ticker: the current price gets a live sparkline
   from `priceHistory` and an "آخر تحديث …" timestamp.
-- **Orders**: sticky-header zebra table on desktop, **card list on mobile**
-  (`OrdersList` switches at `md`). Confirmed = filled tick + tinted row; invalid
-  phone numbers are flagged in amber.
+- **Orders**: sticky-header zebra table on desktop, **compact tap-to-expand card
+  list on mobile** (`OrdersList` switches at `md`) — one line per order (name ·
+  qty · total · **تم البيع**), details + actions (تعديل السعر / تعديل / جاهز /
+  حذف) revealed on tap, so a long order list stays scannable. `ready` = filled
+  tick + brand edge; custom price = amber tag; invalid phone flagged in amber.
+  The same component renders `sold` (Sales) and `archive` rows.
 - **Selection bar** slides up from the bottom when rows are selected (notify /
   export / archive / clear).
 - Brand mark + wordmark (`src/components/Logo.jsx`), redesigned navbar with an
@@ -119,11 +154,12 @@ npm run preview   # serve the build locally
 
 - Installable PWA (`vite-plugin-pwa`): standalone display, `أغروفيت` name, dark
   theme colour, maskable icons (`npm run gen:icons` rebuilds them from the mark).
-- **Bottom tab bar** on mobile (`BottomNav`: الرئيسية / الأرشيف / الإعدادات) and a
-  **floating "+" button** (`Fab`) for new orders; the top nav drops its links on
-  mobile. Segmented status control instead of a dropdown. Safe-area insets on the
-  nav, FAB, selection bar and sheets. Modals are bottom sheets with a grab handle.
-- `الأرشيف` is now its own page/route, not a modal.
+- **Bottom tab bar** on mobile (`BottomNav`: الرئيسية / المبيعات / المخزون /
+  الأرشيف; الإعدادات lives in the account menu) and a **floating "+" button**
+  (`Fab`) for new orders; the top nav keeps the full set on desktop. Segmented
+  status control instead of a dropdown. Safe-area insets on the nav, FAB,
+  selection bar and sheets. Modals are bottom sheets with a grab handle.
+- `الأرشيف`, `المبيعات`, `المخزون` are each their own page/route.
 
 ## Notify clients
 
@@ -193,19 +229,22 @@ netlify/functions/send-sms.js Serverless SMS sender (httpSMS / Twilio), auth-gat
 src/
   lib/firebase.js          Firebase init (auth + Firestore w/ offline cache)
   context/AuthContext.jsx  Auth state + normalized user object
-  services/orders.js       Order reads/writes, price-sync batch, deleteAllArchived
+  services/orders.js       Order reads/writes, per-client price, price-sync batch
+  services/sales.js        soldOrders feed + sellOrder / undoSale / deleteSale (txns)
+  services/stock.js        settings/stock + stockMovements ledger, restock / adjust
   services/price.js        Current price + price history
   services/smsGateway.js   httpSMS client: sendOne / sendBulk / testGateway
   services/smsBackend.js   Client for netlify/functions/send-sms (status + bulk)
-  hooks/                   useOrders, usePrice, useSmsGateway, useSmsBackend
+  hooks/                   useOrders, useSales, useStock, usePrice, useSmsGateway,
+                           useSmsBackend
   components/ui/           Button, IconButton, Field, Badge, Menu, Modal, Toast,
                            ConfirmProvider, Switch, SegmentedControl
   components/              Navbar, BottomNav, Fab, Logo, KpiCard, PriceCard, Sparkline,
                            OrdersToolbar, OrdersList, OrdersTable, OrderCard, OrderForm,
-                           SelectionBar, NotifyClientsDialog, SmsGatewaySetup, AuthShell,
-                           Spinner
-  pages/                   Login, Signup, Dashboard, Archive, Settings, Profile,
-                           _Preview (dev only)
+                           QuickPriceDialog, SelectionBar, NotifyClientsDialog,
+                           SmsGatewaySetup, AuthShell, Spinner
+  pages/                   Login, Signup, Dashboard, Sales, Stock, Archive, Settings,
+                           Profile, _Preview (dev only)
   utils/                   format (DZD/number/relative), phone (DZ mobile / E.164),
                            sms (templates + sms: / wa.me URIs), exportExcel
 ```

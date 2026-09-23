@@ -6,7 +6,7 @@ function SkeletonRows() {
   return (
     <div className="space-y-2 p-4">
       {Array.from({ length: 5 }).map((_, i) => (
-        <div key={i} className="h-14 animate-pulse rounded-xl bg-surface-hi/50" />
+        <div key={i} className="h-11 animate-pulse rounded-lg bg-surface-hi/50" />
       ))}
     </div>
   )
@@ -38,13 +38,13 @@ export default function OrdersList({
     <>
       {/* Desktop / tablet: table */}
       <div className="scroll-thin hidden overflow-x-auto md:block">
-        <div className="min-w-[760px]">
+        <div className="min-w-[860px]">
           <OrdersTable orders={orders} mode={mode} {...handlers} />
         </div>
       </div>
 
-      {/* Mobile: card list */}
-      <div className="space-y-2 p-3 md:hidden">
+      {/* Mobile: compact card list */}
+      <div className="space-y-1.5 p-2.5 md:hidden">
         {orders.map((o) => (
           <OrderCard
             key={o.id}
@@ -52,10 +52,14 @@ export default function OrdersList({
             mode={mode}
             selected={handlers.selectedIds?.includes(o.id)}
             onToggle={handlers.onToggle}
+            onSell={handlers.onSell}
             onConfirm={handlers.onConfirm}
             onEdit={handlers.onEdit}
+            onPrice={handlers.onPrice}
             onDelete={handlers.onDelete}
             onRestore={handlers.onRestore}
+            onUndoSale={handlers.onUndoSale}
+            onAddToList={handlers.onAddToList}
           />
         ))}
       </div>

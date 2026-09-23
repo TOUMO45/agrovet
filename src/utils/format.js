@@ -3,10 +3,17 @@ import { arDZ } from 'date-fns/locale'
 
 // Algerian Dinar. Grouped with a thin space (fr-DZ style): 12 345 د.ج
 const numberFmt = new Intl.NumberFormat('fr-DZ', { maximumFractionDigits: 2 })
+const intFmt = new Intl.NumberFormat('fr-DZ', { maximumFractionDigits: 0 })
 
 export function formatNumber(n) {
   const value = Number(n)
   return Number.isFinite(value) ? numberFmt.format(value) : '0'
+}
+
+/** Whole-number formatting for quantities / stock counts (no decimals). */
+export function formatInt(n) {
+  const value = Number(n)
+  return Number.isFinite(value) ? intFmt.format(Math.round(value)) : '0'
 }
 
 export function formatDZD(n) {

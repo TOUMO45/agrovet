@@ -1,10 +1,12 @@
 import { NavLink } from 'react-router-dom'
-import { Home, Archive, Settings } from 'lucide-react'
+import { Home, ShoppingCart, Boxes, ClipboardList, Archive } from 'lucide-react'
 
 const TABS = [
   { to: '/dashboard', label: 'الرئيسية', icon: Home },
+  { to: '/sales', label: 'المبيعات', icon: ShoppingCart },
+  { to: '/stock', label: 'المخزون', icon: Boxes },
+  { to: '/lists', label: 'القوائم', icon: ClipboardList },
   { to: '/archive', label: 'الأرشيف', icon: Archive },
-  { to: '/settings', label: 'الإعدادات', icon: Settings },
 ]
 
 export default function BottomNav() {

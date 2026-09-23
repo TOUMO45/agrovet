@@ -1,9 +1,12 @@
 import { useEffect, useMemo, useRef, useState } from 'react'
 import { useNavigate } from 'react-router-dom'
-import { Archive, Coins, Download, ListChecks, Package, Plus } from 'lucide-react'
+import { Archive, Boxes, Coins, Download, Hourglass, Plus } from 'lucide-react'
 import { useAuth } from '../context/AuthContext'
 import { useOrders } from '../hooks/useOrders'
 import { usePrice } from '../hooks/usePrice'
+import { useSales } from '../hooks/useSales'
+import { useStock } from '../hooks/useStock'
+import { useLists } from '../hooks/useLists'
 import {
   addOrder,
   archiveMany,
@@ -12,8 +15,10 @@ import {
   syncUnconfirmedOrderPrices,
   updateOrder,
 } from '../services/orders'
+import { sellOrder } from '../services/sales'
+import { addListEntry } from '../services/lists'
 import { exportOrdersToExcel } from '../utils/exportExcel'
-import { formatDZD, formatNumber } from '../utils/format'
+import { formatDZD, formatInt, orderUnitPrice } from '../utils/format'
 import Modal from '../components/ui/Modal'
 import { useToast } from '../components/ui/Toast'
 import { useConfirm } from '../components/ui/ConfirmProvider'
@@ -23,19 +28,32 @@ import OrdersToolbar from '../components/OrdersToolbar'
 import OrdersList from '../components/OrdersList'
 import SelectionBar from '../components/SelectionBar'
 import OrderForm from '../components/OrderForm'
+import QuickPriceDialog from '../components/QuickPriceDialog'
 import NotifyClientsDialog from '../components/NotifyClientsDialog'
+import AddToListDialog from '../components/AddToListDialog'
 import Fab from '../components/Fab'
+
+const startOfToday = () => {
+  const d = new Date()
+  d.setHours(0, 0, 0, 0)
+  return d.getTime()
+}
 
 export default function Dashboard() {
   const { user } = useAuth()
   const navigate = useNavigate()
   const { orders, loading, error, setError } = useOrders()
   const { currentPrice, priceHistory, updatePrice } = usePrice()
+  const { sales } = useSales()
+  const { available, lowThreshold } = useStock()
+  const { lists } = useLists()
   const toast = useToast()
   const confirm = useConfirm()
 
   const [showAdd, setShowAdd] = useState(false)
   const [editingOrder, setEditingOrder] = useState(null)
+  const [priceOrder, setPriceOrder] = useState(null)
+  const [listOrder, setListOrder] = useState(null)
   const [notifyOpen, setNotifyOpen] = useState(false)
   const [selectedIds, setSelectedIds] = useState([])
   const [search, setSearch] = useState('')
@@ -62,28 +80,48 @@ export default function Dashboard() {
     const term = search.trim().toLowerCase()
     return orders.filter((o) => {
       if (term && !o.customerName.toLowerCase().includes(term)) return false
-      if (statusFilter === 'confirmed' && !o.confirmed) return false
+      if (statusFilter === 'ready' && !o.confirmed) return false
       if (statusFilter === 'pending' && o.confirmed) return false
       return true
     })
   }, [orders, search, statusFilter])
 
-  const stats = useMemo(
+  const pending = useMemo(
     () =>
       orders.reduce(
         (a, o) => {
-          a.sales += Number(o.totalPrice) || 0
-          a.qty += Number(o.quantity) || 0
+          const qty = Number(o.quantity) || 0
+          a.value += Number(o.totalPrice) || 0
+          a.qty += qty
           if (o.confirmed) {
-            a.confirmedQty += Number(o.quantity) || 0
-            a.confirmedCount += 1
+            a.ready += 1
+            a.readyQty += qty
           }
           return a
         },
-        { sales: 0, qty: 0, confirmedQty: 0, confirmedCount: 0 },
+        { value: 0, qty: 0, ready: 0, readyQty: 0 },
       ),
     [orders],
   )
+
+  const revenue = useMemo(() => {
+    const from = startOfToday()
+    return sales.reduce(
+      (a, s) => {
+        const total = Number(s.totalPrice) || 0
+        a.all += total
+        const t = s.soldAt ? new Date(s.soldAt).getTime() : 0
+        if (t >= from) {
+          a.today += total
+          a.todayCount += 1
+        }
+        return a
+      },
+      { all: 0, today: 0, todayCount: 0 },
+    )
+  }, [sales])
+
+  const lowStock = lowThreshold > 0 && available <= lowThreshold
 
   const selectedOrders = useMemo(
     () => orders.filter((o) => selectedIds.includes(o.id)),
@@ -115,9 +153,41 @@ export default function Dashboard() {
     toast('تم تحديث الطلب', 'success')
   }
 
+  const handleQuickPrice = async (patch) => {
+    const existing = orders.find((o) => o.id === priceOrder.id)
+    if (!existing) return false
+    const { error: err } = await updateOrder(priceOrder.id, patch, existing, currentPrice)
+    toast(err || 'تم تحديث السعر', err ? 'error' : 'success')
+    return !err
+  }
+
+  const handleAddToList = async (listId, payload) => {
+    const { error: err } = await addListEntry(listId, payload, user)
+    toast(err || 'تمت الإضافة إلى اللائحة', err ? 'error' : 'success')
+    return !err
+  }
+
   const handleConfirm = async (order, checked) => {
     const { error: err } = await setOrderConfirmed(order, checked, currentPrice)
     if (err) toast(err, 'error')
+  }
+
+  const handleSell = async (order) => {
+    const qty = Number(order.quantity) || 0
+    const total = qty * orderUnitPrice(order, currentPrice)
+    const after = available - qty
+    const short = after < 0
+    const ok = await confirm({
+      title: 'تأكيد البيع',
+      message: `بيع ${formatInt(order.quantity)} كتكوت لـ «${order.customerName}» بمبلغ ${formatDZD(total)}. المخزون بعد البيع: ${formatInt(after)}${short ? ' (بالسالب — المخزون غير كافٍ)' : ''}.`,
+      confirmLabel: 'تم البيع',
+      tone: short ? 'danger' : 'brand',
+    })
+    if (!ok) return
+    const { error: err, balanceAfter } = await sellOrder(order, currentPrice, user)
+    if (err) return toast(err, 'error')
+    toast(`تم تسجيل البيع · المخزون: ${formatInt(balanceAfter)}`, 'success')
+    setSelectedIds((ids) => ids.filter((x) => x !== order.id))
   }
 
   const handleDelete = async (order) => {
@@ -184,18 +254,26 @@ export default function Dashboard() {
           className="col-span-2 lg:col-span-1"
         />
         <KpiCard
-          label="إجمالي المبيعات"
-          value={formatDZD(stats.sales)}
-          sub={`${orders.length} طلب نشط`}
+          label="المخزون المتاح"
+          value={formatInt(available)}
+          sub={lowStock ? '⚠ مخزون منخفض' : lowThreshold > 0 ? `الحدّ الأدنى: ${formatInt(lowThreshold)}` : 'كتكوت'}
+          icon={Boxes}
+          accent={lowStock ? 'danger' : 'brand'}
+          onClick={() => navigate('/stock')}
+        />
+        <KpiCard
+          label="الإيرادات المحقّقة"
+          value={formatDZD(revenue.all)}
+          sub={`اليوم: ${formatDZD(revenue.today)} · ${revenue.todayCount} بيع`}
           icon={Coins}
           accent="brand"
+          onClick={() => navigate('/sales')}
         />
-        <KpiCard label="إجمالي الكمية" value={formatNumber(stats.qty)} sub="كتكوت" icon={Package} accent="info" />
         <KpiCard
-          label="الكمية المؤكدة"
-          value={formatNumber(stats.confirmedQty)}
-          sub={`${stats.confirmedCount} من ${orders.length} طلب`}
-          icon={ListChecks}
+          label="طلبات منتظرة"
+          value={formatDZD(pending.value)}
+          sub={`${orders.length} طلب · ${formatInt(pending.qty)} كتكوت · ${pending.ready} مؤكّد (${formatInt(pending.readyQty)} كتكوت)`}
+          icon={Hourglass}
           accent="warn"
           className="col-span-2 lg:col-span-1"
         />
@@ -211,11 +289,12 @@ export default function Dashboard() {
           onNew={() => setShowAdd(true)}
           menuItems={[
             {
-              label: 'تصدير الطلبات المؤكدة',
+              label: 'تصدير الطلبات المؤكّدة',
               icon: Download,
               onClick: () =>
                 exportRows(orders.filter((o) => o.confirmed), 'الطلبات_المؤكدة', 'الطلبات المؤكدة'),
             },
+            { label: 'فتح المبيعات', icon: Coins, onClick: () => navigate('/sales') },
             { label: 'فتح الأرشيف', icon: Archive, onClick: () => navigate('/archive') },
             null,
             { label: 'أرشفة كل الطلبات', icon: Archive, onClick: archiveAll, tone: 'danger' },
@@ -230,9 +309,12 @@ export default function Dashboard() {
           allSelected={allSelected}
           onToggle={toggleSelect}
           onToggleAll={toggleAll}
+          onSell={handleSell}
           onConfirm={handleConfirm}
           onEdit={setEditingOrder}
+          onPrice={setPriceOrder}
           onDelete={handleDelete}
+          onAddToList={setListOrder}
           emptyText={search || statusFilter !== 'all' ? 'لا نتائج مطابقة' : 'لا توجد طلبات بعد'}
           emptyHint={search || statusFilter !== 'all' ? undefined : 'أضف أول طلب من زر +'}
         />
@@ -262,6 +344,20 @@ export default function Dashboard() {
           />
         )}
       </Modal>
+
+      <QuickPriceDialog
+        order={priceOrder}
+        currentPrice={currentPrice}
+        onClose={() => setPriceOrder(null)}
+        onSave={handleQuickPrice}
+      />
+
+      <AddToListDialog
+        order={listOrder}
+        lists={lists}
+        onClose={() => setListOrder(null)}
+        onSave={handleAddToList}
+      />
 
       <NotifyClientsDialog
         isOpen={notifyOpen}

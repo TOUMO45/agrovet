@@ -1,13 +1,16 @@
 import { useEffect, useRef, useState } from 'react'
 import { Link, NavLink, useNavigate } from 'react-router-dom'
 import { signOut } from 'firebase/auth'
-import { Home, Archive, Settings, LogOut, UserRound } from 'lucide-react'
+import { Home, ShoppingCart, Boxes, ClipboardList, Archive, Settings, LogOut, UserRound } from 'lucide-react'
 import { auth } from '../lib/firebase'
 import { useAuth } from '../context/AuthContext'
 import Logo from './Logo'
 
 const NAV = [
   { to: '/dashboard', label: 'الرئيسية', icon: Home },
+  { to: '/sales', label: 'المبيعات', icon: ShoppingCart },
+  { to: '/stock', label: 'المخزون', icon: Boxes },
+  { to: '/lists', label: 'القوائم', icon: ClipboardList },
   { to: '/archive', label: 'الأرشيف', icon: Archive },
   { to: '/settings', label: 'الإعدادات', icon: Settings },
 ]

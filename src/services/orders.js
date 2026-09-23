@@ -28,6 +28,7 @@ function mapOrder(snap, { withArchivedAt = false } = {}) {
     totalPrice: d.totalPrice ?? 0,
     notes: d.notes ?? '',
     confirmed: d.confirmed === true,
+    priceOverridden: d.priceOverridden === true,
     createdBy: d.createdBy ?? null,
     createdByName: d.createdByName ?? '',
     date: d.timestamp?.toDate?.().toISOString() ?? new Date().toISOString(),
@@ -62,18 +63,25 @@ export function subscribeArchivedOrders(onData, onError) {
   )
 }
 
-export async function addOrder({ customerName, phoneNumber, quantity, notes }, currentPrice, author) {
+export async function addOrder(
+  { customerName, phoneNumber, quantity, notes, unitPrice, priceOverridden },
+  currentPrice,
+  author,
+) {
   try {
     const qty = Number(quantity)
-    const unitPrice = Number(currentPrice) || 0
+    const custom =
+      priceOverridden === true && Number.isFinite(Number(unitPrice)) && Number(unitPrice) > 0
+    const unit = custom ? Number(unitPrice) : Number(currentPrice) || 0
     const ref = await addDoc(activeCol, {
       customerName,
       phoneNumber,
       quantity: qty,
-      unitPrice,
-      totalPrice: qty * unitPrice,
+      unitPrice: unit,
+      totalPrice: qty * unit,
       notes: notes || '',
       confirmed: false,
+      priceOverridden: custom,
       createdBy: author?.uid ?? null,
       createdByName: author?.name ?? '',
       timestamp: serverTimestamp(),
@@ -86,15 +94,37 @@ export async function addOrder({ customerName, phoneNumber, quantity, notes }, c
 }
 
 /**
- * Update an order. Unit price is locked once an order is confirmed; while it is
- * still pending it tracks the current global price. Changing the quantity always
- * recomputes the total from the effective unit price.
+ * Update an order. Price rules, in order of precedence:
+ *  - `patch.priceOverridden === false` → drop any custom price, snap back to the
+ *    global price (or the frozen price if the order is confirmed).
+ *  - `patch.unitPrice` a positive number → set a custom per-client price and
+ *    flag it so the global-price sync leaves it alone.
+ *  - confirmed order → keep its frozen price.
+ *  - already has a custom price → keep it.
+ *  - otherwise → track the current global price.
+ * Changing the quantity always recomputes the total.
  */
 export async function updateOrder(id, patch, existing, currentPrice) {
   try {
     const quantity = Number(patch.quantity ?? existing.quantity)
     const lockedUnit = orderUnitPrice(existing, currentPrice)
-    const unitPrice = existing.confirmed ? lockedUnit : Number(currentPrice) || lockedUnit
+    const patchUnit = Number(patch.unitPrice)
+
+    let priceOverridden = existing.priceOverridden === true
+    let unitPrice
+
+    if (patch.priceOverridden === false) {
+      priceOverridden = false
+      unitPrice = existing.confirmed ? lockedUnit : Number(currentPrice) || lockedUnit
+    } else if (Number.isFinite(patchUnit) && patchUnit > 0) {
+      priceOverridden = true
+      unitPrice = patchUnit
+    } else if (existing.confirmed || priceOverridden) {
+      unitPrice = lockedUnit
+    } else {
+      unitPrice = Number(currentPrice) || lockedUnit
+    }
+
     await updateDoc(doc(db, 'activeOrders', id), {
       customerName: patch.customerName ?? existing.customerName,
       phoneNumber: patch.phoneNumber ?? existing.phoneNumber,
@@ -103,6 +133,7 @@ export async function updateOrder(id, patch, existing, currentPrice) {
       totalPrice: quantity * unitPrice,
       notes: patch.notes ?? existing.notes,
       confirmed: patch.confirmed ?? existing.confirmed,
+      priceOverridden,
     })
     return { error: null }
   } catch (err) {
@@ -148,6 +179,7 @@ export async function archiveOrder(order) {
       totalPrice: order.totalPrice,
       notes: order.notes || '',
       confirmed: order.confirmed === true,
+      priceOverridden: order.priceOverridden === true,
       createdBy: order.createdBy ?? null,
       createdByName: order.createdByName ?? '',
       timestamp: serverTimestamp(),
@@ -172,6 +204,7 @@ export async function restoreOrder(order, currentPrice) {
       totalPrice: order.quantity * unitPrice,
       notes: order.notes || '',
       confirmed: order.confirmed === true,
+      priceOverridden: order.priceOverridden === true,
       createdBy: order.createdBy ?? null,
       createdByName: order.createdByName ?? '',
       timestamp: serverTimestamp(),
@@ -232,7 +265,10 @@ export async function deleteArchivedByIds(ids = []) {
 export async function syncUnconfirmedOrderPrices(orders, currentPrice) {
   const price = Number(currentPrice) || 0
   const stale = orders.filter(
-    (o) => !o.confirmed && Math.abs((o.unitPrice ?? -1) - price) > 1e-9,
+    (o) =>
+      !o.confirmed &&
+      !o.priceOverridden &&
+      Math.abs((o.unitPrice ?? -1) - price) > 1e-9,
   )
   if (stale.length === 0) return { error: null, updated: 0 }
   try {

@@ -7,6 +7,9 @@ import BottomNav from './components/BottomNav'
 import Login from './pages/Login'
 import Signup from './pages/Signup'
 import Dashboard from './pages/Dashboard'
+import Sales from './pages/Sales'
+import Stock from './pages/Stock'
+import Lists from './pages/Lists'
 import Archive from './pages/Archive'
 import Settings from './pages/Settings'
 import Profile from './pages/Profile'
@@ -38,12 +41,16 @@ export default function App() {
             {/* dev-only: inspect these pages without a session */}
             <Route path="/dev/archive" element={<Archive />} />
             <Route path="/dev/settings" element={<Settings />} />
+            <Route path="/dev/stock" element={<Stock />} />
           </>
         )}
         <Route path="/" element={<Navigate to={user ? '/dashboard' : '/login'} replace />} />
         <Route path="/login" element={user ? <Navigate to="/dashboard" replace /> : <Login />} />
         <Route path="/signup" element={user ? <Navigate to="/dashboard" replace /> : <Signup />} />
         <Route path="/dashboard" element={guard(<Dashboard />)} />
+        <Route path="/sales" element={guard(<Sales />)} />
+        <Route path="/stock" element={guard(<Stock />)} />
+        <Route path="/lists" element={guard(<Lists />)} />
         <Route path="/archive" element={guard(<Archive />)} />
         <Route path="/settings" element={guard(<Settings />)} />
         <Route path="/profile" element={guard(<Profile />)} />

@@ -18,6 +18,28 @@ service cloud.firestore {
       allow read, write: if signedIn();
     }
 
+    // Completed sales — every "تم البيع" order lands here.
+    match /soldOrders/{id} {
+      allow read, write: if signedIn();
+    }
+
+    // Stock ledger (restock / sale / adjust / return / death). Signed-in users
+    // may also edit an entry from the Stock page — the app reverses the entry's
+    // effect on the balance and repairs the running-balance column client-side.
+    match /stockMovements/{id} {
+      allow read, create, update, delete: if signedIn();
+    }
+
+    // Dated batches (a shipment received on a date) with a total quantity
+    // capacity, plus the client entries drawn against that capacity.
+    match /lists/{id} {
+      allow read, write: if signedIn();
+    }
+
+    match /listEntries/{id} {
+      allow read, write: if signedIn();
+    }
+
     match /priceHistory/{id} {
       allow read, create: if signedIn();
       allow update, delete: if false; // history is append-only

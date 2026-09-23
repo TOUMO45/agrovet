@@ -5,8 +5,8 @@ import SegmentedControl from './ui/SegmentedControl'
 
 const STATUS_OPTIONS = [
   { value: 'all', label: 'الكل' },
-  { value: 'confirmed', label: 'مؤكد' },
-  { value: 'pending', label: 'منتظر' },
+  { value: 'pending', label: 'غير مؤكّد' },
+  { value: 'ready', label: 'مؤكّد' },
 ]
 
 export default function OrdersToolbar({
