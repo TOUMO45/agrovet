@@ -8,6 +8,7 @@ import {
   addListEntry,
   deleteList,
   deleteListEntry,
+  setListArchived,
   setListEntryConfirmed,
   updateList,
   updateListEntry,
@@ -25,7 +26,8 @@ import Button from '../components/ui/Button'
 import Fab from '../components/Fab'
 
 export default function Lists() {
-  const { lists, loading } = useLists()
+  const { lists: allLists, loading } = useLists()
+  const lists = useMemo(() => allLists.filter((l) => !l.archived), [allLists])
   const { user } = useAuth()
   const toast = useToast()
   const confirm = useConfirm()
@@ -65,6 +67,18 @@ export default function Lists() {
     const { error } = await deleteList(list)
     toast(error || 'تم حذف اللائحة', error ? 'error' : 'success')
     if (activeListId === list.id) setActiveListId(null)
+  }
+
+  const handleArchiveList = async (list) => {
+    const ok = await confirm({
+      title: 'أرشفة اللائحة',
+      message: `نقل «${list.title || formatDate(list.date)}» مع كل عملائها إلى الأرشيف؟ يمكنك إعادتها من صفحة الأرشيف.`,
+      confirmLabel: 'أرشفة',
+    })
+    if (!ok) return
+    const { error } = await setListArchived(list, true)
+    toast(error || 'تم نقل اللائحة إلى الأرشيف', error ? 'error' : 'success')
+    if (!error && activeListId === list.id) setActiveListId(null)
   }
 
   const handleAddEntry = async (payload) => {
@@ -139,6 +153,7 @@ export default function Lists() {
               list={list}
               onOpen={(l) => setActiveListId(l.id)}
               onEdit={setEditingList}
+              onArchive={handleArchiveList}
               onDelete={handleDeleteList}
             />
           ))}

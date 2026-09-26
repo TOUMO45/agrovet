@@ -1,8 +1,9 @@
-import { Pencil, Trash2 } from 'lucide-react'
+import { Archive, Pencil, RotateCcw, Trash2 } from 'lucide-react'
 import IconButton from './ui/IconButton'
 import { formatDate, formatInt } from '../utils/format'
 
-export default function ListCard({ list, onOpen, onEdit, onDelete }) {
+/** `archived` mode swaps edit/archive for a restore button. */
+export default function ListCard({ list, archived = false, onOpen, onEdit, onArchive, onRestore, onDelete }) {
   const pct = list.quantity > 0 ? Math.min(100, Math.round((list.usedQty / list.quantity) * 100)) : 0
   const full = list.remaining <= 0
 
@@ -14,7 +15,14 @@ export default function ListCard({ list, onOpen, onEdit, onDelete }) {
           <p className="mt-0.5 text-[12px] text-fg-mute">{formatDate(list.date)}</p>
         </button>
         <div className="flex shrink-0 items-center gap-0.5">
-          <IconButton icon={Pencil} size="sm" label="تعديل اللائحة" onClick={() => onEdit(list)} />
+          {archived ? (
+            <IconButton icon={RotateCcw} tone="brand" size="sm" label="إعادة إلى القوائم" onClick={() => onRestore(list)} />
+          ) : (
+            <>
+              <IconButton icon={Archive} tone="info" size="sm" label="أرشفة اللائحة" onClick={() => onArchive(list)} />
+              <IconButton icon={Pencil} size="sm" label="تعديل اللائحة" onClick={() => onEdit(list)} />
+            </>
+          )}
           <IconButton icon={Trash2} tone="danger" size="sm" label="حذف اللائحة" onClick={() => onDelete(list)} />
         </div>
       </div>

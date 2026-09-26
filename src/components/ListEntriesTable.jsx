@@ -31,6 +31,15 @@ function PhoneLink({ value, small }) {
 
 function ConfirmToggle({ entry, onConfirm }) {
   const on = entry.confirmed
+  if (!onConfirm) {
+    return on ? (
+      <span className="grid h-7 w-7 shrink-0 place-items-center rounded-full bg-brand text-brand-ink" title="مؤكّد">
+        <Check className="h-3.5 w-3.5" strokeWidth={3} />
+      </span>
+    ) : (
+      <span className="block h-7 w-7 shrink-0" />
+    )
+  }
   return (
     <button
       type="button"
@@ -75,8 +84,12 @@ function Actions({ entry, onEdit, onDelete, onSms, vertical }) {
 
 const confirmedRow = 'bg-brand/[0.13] shadow-[inset_-3px_0_0_0_#34D399]'
 
-/** Client entries inside one list: table on desktop, card list on mobile. */
-export default function ListEntriesTable({ entries, loading, onEdit, onDelete, onSms, onConfirm }) {
+/**
+ * Client entries inside one list: table on desktop, card list on mobile.
+ * `readOnly` (archived lists) drops the action buttons and the confirm toggle.
+ */
+export default function ListEntriesTable({ entries, loading, readOnly = false, onEdit, onDelete, onSms, onConfirm }) {
+  const confirmHandler = readOnly ? null : onConfirm
   return (
     <div className="overflow-hidden rounded-xl border border-line">
       {loading ? (
@@ -99,7 +112,7 @@ export default function ListEntriesTable({ entries, loading, onEdit, onDelete, o
                   <th className="w-36">الهاتف</th>
                   <th className="w-24 text-left">الكمية</th>
                   <th className="w-32">التاريخ</th>
-                  <th className="w-28 text-center">إجراءات</th>
+                  {!readOnly && <th className="w-28 text-center">إجراءات</th>}
                 </tr>
               </thead>
               <tbody>
@@ -111,7 +124,7 @@ export default function ListEntriesTable({ entries, loading, onEdit, onDelete, o
                     } hover:bg-surface-hi/60`}
                   >
                     <td>
-                      <ConfirmToggle entry={entry} onConfirm={onConfirm} />
+                      <ConfirmToggle entry={entry} onConfirm={confirmHandler} />
                     </td>
                     <td className="max-w-[220px] truncate font-medium text-fg" title={entry.clientName}>
                       {entry.clientName}
@@ -125,11 +138,13 @@ export default function ListEntriesTable({ entries, loading, onEdit, onDelete, o
                     <td className="tnum whitespace-nowrap text-[12px] text-fg-mute">
                       {formatDate(entry.date)}
                     </td>
-                    <td>
-                      <div className="opacity-80 transition-opacity group-hover:opacity-100">
-                        <Actions entry={entry} onEdit={onEdit} onDelete={onDelete} onSms={onSms} />
-                      </div>
-                    </td>
+                    {!readOnly && (
+                      <td>
+                        <div className="opacity-80 transition-opacity group-hover:opacity-100">
+                          <Actions entry={entry} onEdit={onEdit} onDelete={onDelete} onSms={onSms} />
+                        </div>
+                      </td>
+                    )}
                   </tr>
                 ))}
               </tbody>
@@ -143,7 +158,7 @@ export default function ListEntriesTable({ entries, loading, onEdit, onDelete, o
                 key={entry.id}
                 className={`flex items-center gap-3 px-3 py-2.5 transition-colors ${entry.confirmed ? confirmedRow : ''}`}
               >
-                <ConfirmToggle entry={entry} onConfirm={onConfirm} />
+                <ConfirmToggle entry={entry} onConfirm={confirmHandler} />
                 <div className="min-w-0 flex-1">
                   <p className="truncate text-[13px] font-medium text-fg">{entry.clientName}</p>
                   <p className="tnum mt-0.5 flex items-center gap-2 text-[11px] text-fg-mute">
@@ -154,7 +169,9 @@ export default function ListEntriesTable({ entries, loading, onEdit, onDelete, o
                 <span className="tnum shrink-0 text-[13px] font-semibold text-fg-dim">
                   {formatInt(entry.quantity)}
                 </span>
-                <Actions entry={entry} onEdit={onEdit} onDelete={onDelete} onSms={onSms} vertical />
+                {!readOnly && (
+                  <Actions entry={entry} onEdit={onEdit} onDelete={onDelete} onSms={onSms} vertical />
+                )}
               </li>
             ))}
           </ul>

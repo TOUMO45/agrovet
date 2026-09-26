@@ -56,6 +56,7 @@ function mapList(snap) {
     quantity,
     usedQty,
     remaining: quantity - usedQty,
+    archived: d.archived === true,
     notes: d.notes ?? '',
     createdByName: d.createdByName ?? '',
     date: d.date?.toDate?.().toISOString() ?? new Date().toISOString(),
@@ -148,6 +149,17 @@ export async function updateList(id, { title, date, quantity, notes }, existing)
   } catch (err) {
     console.error('Error updating list:', err)
     return { error: MSG }
+  }
+}
+
+/** Move a whole list (with its clients) to the archive, or bring it back. */
+export async function setListArchived(list, archived) {
+  try {
+    await updateDoc(doc(db, 'lists', list.id), { archived })
+    return { error: null }
+  } catch (err) {
+    console.error('Error archiving list:', err)
+    return { error: archived ? 'حدث خطأ أثناء أرشفة اللائحة' : 'حدث خطأ أثناء إعادة اللائحة' }
   }
 }
 
