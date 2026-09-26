@@ -24,6 +24,7 @@ function ArchivedLists() {
   const [openId, setOpenId] = useState(null)
   const openList = archived.find((l) => l.id === openId) || null
   const { entries, loading: entriesLoading } = useListEntries(openId)
+  const { currentPrice } = usePrice()
 
   const label = (list) => list.title || formatDate(list.date)
 
@@ -94,7 +95,7 @@ function ArchivedLists() {
         icon={ClipboardList}
         size="lg"
       >
-        {openList && <ListEntriesTable entries={entries} loading={entriesLoading} readOnly />}
+        {openList && <ListEntriesTable entries={entries} loading={entriesLoading} unitPrice={currentPrice} readOnly />}
       </Modal>
     </>
   )

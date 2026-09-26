@@ -3,6 +3,7 @@ import { ClipboardList, Plus, UserPlus } from 'lucide-react'
 import { useAuth } from '../context/AuthContext'
 import { useLists } from '../hooks/useLists'
 import { useListEntries } from '../hooks/useListEntries'
+import { usePrice } from '../hooks/usePrice'
 import {
   addList,
   addListEntry,
@@ -13,7 +14,7 @@ import {
   updateList,
   updateListEntry,
 } from '../services/lists'
-import { formatDate, formatInt } from '../utils/format'
+import { formatDate, formatDZD, formatInt } from '../utils/format'
 import { useToast } from '../components/ui/Toast'
 import { useConfirm } from '../components/ui/ConfirmProvider'
 import ListCard from '../components/ListCard'
@@ -41,6 +42,8 @@ export default function Lists() {
 
   const activeList = useMemo(() => lists.find((l) => l.id === activeListId) || null, [lists, activeListId])
   const { entries, loading: entriesLoading } = useListEntries(activeListId)
+  const { currentPrice } = usePrice()
+  const entriesQty = entries.reduce((sum, e) => sum + e.quantity, 0)
 
   const handleAddList = async (payload) => {
     const { error } = await addList(payload, user)
@@ -102,9 +105,17 @@ export default function Lists() {
   const smsRecipients = useMemo(
     () =>
       smsEntry
-        ? [{ id: smsEntry.id, customerName: smsEntry.clientName, phoneNumber: smsEntry.phoneNumber, quantity: smsEntry.quantity }]
+        ? [
+            {
+              id: smsEntry.id,
+              customerName: smsEntry.clientName,
+              phoneNumber: smsEntry.phoneNumber,
+              quantity: smsEntry.quantity,
+              totalPrice: smsEntry.quantity * currentPrice,
+            },
+          ]
         : [],
-    [smsEntry],
+    [smsEntry, currentPrice],
   )
 
   const handleDeleteEntry = async (entry) => {
@@ -215,11 +226,23 @@ export default function Lists() {
                   ? 'اللائحة ممتلئة — لا يمكن إضافة المزيد.'
                   : `الباقي: ${formatInt(activeList.remaining)}`}
               </p>
+              <div className="mt-3 flex items-center justify-between border-t border-line pt-3">
+                <span className="text-[13px] text-fg-dim">
+                  إجمالي اللائحة
+                  <span className="tnum ms-1 text-[12px] text-fg-mute">
+                    ({formatInt(entriesQty)} × {formatDZD(currentPrice)})
+                  </span>
+                </span>
+                <span className="tnum text-base font-bold text-brand-bright">
+                  {formatDZD(entriesQty * currentPrice)}
+                </span>
+              </div>
             </div>
 
             <ListEntriesTable
               entries={entries}
               loading={entriesLoading}
+              unitPrice={currentPrice}
               onEdit={setEditingEntry}
               onDelete={handleDeleteEntry}
               onSms={setSmsEntry}

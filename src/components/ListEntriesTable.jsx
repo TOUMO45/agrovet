@@ -1,6 +1,6 @@
 import { AlertTriangle, Check, MessageSquare, Pencil, Phone, Trash2 } from 'lucide-react'
 import IconButton from './ui/IconButton'
-import { formatDate, formatInt } from '../utils/format'
+import { formatDate, formatDZD, formatInt } from '../utils/format'
 import { isValidDzMobile, toLocal } from '../utils/phone'
 
 /** Tap-to-call link, same behaviour as the home orders table. */
@@ -88,7 +88,16 @@ const confirmedRow = 'bg-brand/[0.13] shadow-[inset_-3px_0_0_0_#34D399]'
  * Client entries inside one list: table on desktop, card list on mobile.
  * `readOnly` (archived lists) drops the action buttons and the confirm toggle.
  */
-export default function ListEntriesTable({ entries, loading, readOnly = false, onEdit, onDelete, onSms, onConfirm }) {
+export default function ListEntriesTable({
+  entries,
+  loading,
+  unitPrice = 0,
+  readOnly = false,
+  onEdit,
+  onDelete,
+  onSms,
+  onConfirm,
+}) {
   const confirmHandler = readOnly ? null : onConfirm
   return (
     <div className="overflow-hidden rounded-xl border border-line">
@@ -104,13 +113,14 @@ export default function ListEntriesTable({ entries, loading, readOnly = false, o
         <>
           {/* Desktop table */}
           <div className="scroll-thin hidden overflow-x-auto md:block">
-            <table className="w-full min-w-[620px] border-separate border-spacing-0 text-sm">
+            <table className="w-full min-w-[720px] border-separate border-spacing-0 text-sm">
               <thead>
                 <tr className="text-right [&>th]:sticky [&>th]:top-0 [&>th]:z-10 [&>th]:border-b [&>th]:border-line [&>th]:bg-surface [&>th]:px-3 [&>th]:py-2 [&>th]:text-[12px] [&>th]:font-semibold [&>th]:text-fg-mute">
                   <th className="w-12">مؤكّد</th>
                   <th>العميل</th>
                   <th className="w-36">الهاتف</th>
                   <th className="w-24 text-left">الكمية</th>
+                  <th className="w-32 text-left">الإجمالي</th>
                   <th className="w-32">التاريخ</th>
                   {!readOnly && <th className="w-28 text-center">إجراءات</th>}
                 </tr>
@@ -134,6 +144,9 @@ export default function ListEntriesTable({ entries, loading, readOnly = false, o
                     </td>
                     <td className="tnum text-left text-[13px] font-semibold text-fg-dim">
                       {formatInt(entry.quantity)}
+                    </td>
+                    <td className="tnum whitespace-nowrap text-left text-[13px] font-semibold text-brand-bright">
+                      {formatDZD(entry.quantity * unitPrice)}
                     </td>
                     <td className="tnum whitespace-nowrap text-[12px] text-fg-mute">
                       {formatDate(entry.date)}
@@ -166,9 +179,12 @@ export default function ListEntriesTable({ entries, loading, readOnly = false, o
                     <span>{formatDate(entry.date)}</span>
                   </p>
                 </div>
-                <span className="tnum shrink-0 text-[13px] font-semibold text-fg-dim">
-                  {formatInt(entry.quantity)}
-                </span>
+                <div className="tnum shrink-0 text-left">
+                  <p className="text-[13px] font-semibold text-fg-dim">{formatInt(entry.quantity)}</p>
+                  <p className="mt-0.5 whitespace-nowrap text-[11px] font-semibold text-brand-bright">
+                    {formatDZD(entry.quantity * unitPrice)}
+                  </p>
+                </div>
                 {!readOnly && (
                   <Actions entry={entry} onEdit={onEdit} onDelete={onDelete} onSms={onSms} vertical />
                 )}
