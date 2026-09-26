@@ -8,6 +8,7 @@ import {
   addListEntry,
   deleteList,
   deleteListEntry,
+  setListEntryConfirmed,
   updateList,
   updateListEntry,
 } from '../services/lists'
@@ -18,6 +19,7 @@ import ListCard from '../components/ListCard'
 import ListForm from '../components/ListForm'
 import ListEntryForm from '../components/ListEntryForm'
 import ListEntriesTable from '../components/ListEntriesTable'
+import NotifyClientsDialog from '../components/NotifyClientsDialog'
 import Modal from '../components/ui/Modal'
 import Button from '../components/ui/Button'
 import Fab from '../components/Fab'
@@ -33,6 +35,7 @@ export default function Lists() {
   const [activeListId, setActiveListId] = useState(null)
   const [showAddEntry, setShowAddEntry] = useState(false)
   const [editingEntry, setEditingEntry] = useState(null)
+  const [smsEntry, setSmsEntry] = useState(null)
 
   const activeList = useMemo(() => lists.find((l) => l.id === activeListId) || null, [lists, activeListId])
   const { entries, loading: entriesLoading } = useListEntries(activeListId)
@@ -75,6 +78,20 @@ export default function Lists() {
     if (error) throw new Error(error)
     toast('تم تحديث العميل', 'success')
   }
+
+  const handleConfirmEntry = async (entry, confirmed) => {
+    const { error } = await setListEntryConfirmed(entry, confirmed)
+    if (error) toast(error, 'error')
+  }
+
+  // The SMS dialog is shared with the home page, which works on orders.
+  const smsRecipients = useMemo(
+    () =>
+      smsEntry
+        ? [{ id: smsEntry.id, customerName: smsEntry.clientName, phoneNumber: smsEntry.phoneNumber, quantity: smsEntry.quantity }]
+        : [],
+    [smsEntry],
+  )
 
   const handleDeleteEntry = async (entry) => {
     const ok = await confirm({
@@ -190,10 +207,18 @@ export default function Lists() {
               loading={entriesLoading}
               onEdit={setEditingEntry}
               onDelete={handleDeleteEntry}
+              onSms={setSmsEntry}
+              onConfirm={handleConfirmEntry}
             />
           </div>
         )}
       </Modal>
+
+      <NotifyClientsDialog
+        isOpen={Boolean(smsEntry)}
+        onClose={() => setSmsEntry(null)}
+        orders={smsRecipients}
+      />
 
       <Modal isOpen={showAddEntry} onClose={() => setShowAddEntry(false)} title="إضافة عميل" icon={UserPlus} size="sm">
         {activeList && (

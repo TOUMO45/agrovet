@@ -71,6 +71,7 @@ function mapEntry(snap) {
     clientName: d.clientName ?? '',
     phoneNumber: d.phoneNumber ?? '',
     quantity: Number(d.quantity) || 0,
+    confirmed: d.confirmed === true,
     notes: d.notes ?? '',
     createdByName: d.createdByName ?? '',
     date: d.timestamp?.toDate?.().toISOString() ?? new Date().toISOString(),
@@ -244,6 +245,17 @@ export async function updateListEntry(entry, { clientName, phoneNumber, quantity
   } catch (err) {
     console.error('Error updating list entry:', err)
     return { error: err?.message || 'حدث خطأ أثناء تحديث العميل' }
+  }
+}
+
+/** Mark a client's final order as confirmed (or undo it). Doesn't touch capacity. */
+export async function setListEntryConfirmed(entry, confirmed) {
+  try {
+    await updateDoc(doc(db, 'listEntries', entry.id), { confirmed })
+    return { error: null }
+  } catch (err) {
+    console.error('Error confirming list entry:', err)
+    return { error: 'حدث خطأ أثناء تأكيد العميل' }
   }
 }
 
