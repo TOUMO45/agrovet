@@ -271,6 +271,70 @@ export async function setListEntryConfirmed(entry, confirmed) {
   }
 }
 
+/**
+ * Move a client out of its list, atomically:
+ *  - `target: 'home'` → creates an order on the home page (activeOrders) at the
+ *    current global price, then removes the entry and frees its capacity.
+ *  - `target: <listId>` → re-points the entry at the other list after checking
+ *    that list's remaining capacity; frees the source and consumes the target.
+ * Returns `{ error }`; a full target list fails without writing anything.
+ */
+export async function transferListEntry(entry, target, currentPrice, author) {
+  if (!target) return { error: 'اختر الوجهة' }
+  if (target === entry.listId) return { error: 'العميل موجود في هذه اللائحة أصلاً' }
+  try {
+    let capacityError = null
+    await runTransaction(db, async (tx) => {
+      const sourceRef = doc(db, 'lists', entry.listId)
+      const entryRef = doc(db, 'listEntries', entry.id)
+      const [sourceSnap, entrySnap] = await Promise.all([tx.get(sourceRef), tx.get(entryRef)])
+      if (!entrySnap.exists()) throw new Error('العميل غير موجود — ربما حُذف للتو')
+      // Use the stored quantity, not the client's copy, in case it was just edited.
+      const qty = Number(entrySnap.data().quantity) || 0
+      const sourceUsed = sourceSnap.exists() ? Number(sourceSnap.data().usedQty) || 0 : 0
+
+      if (target === 'home') {
+        const unit = Number(currentPrice) || 0
+        tx.set(doc(collection(db, 'activeOrders')), {
+          customerName: entry.clientName,
+          phoneNumber: entry.phoneNumber || '',
+          quantity: qty,
+          unitPrice: unit,
+          totalPrice: qty * unit,
+          notes: entry.notes || '',
+          confirmed: entry.confirmed === true,
+          priceOverridden: false,
+          createdBy: author?.uid ?? null,
+          createdByName: author?.name || entry.createdByName || '',
+          timestamp: serverTimestamp(),
+        })
+        tx.delete(entryRef)
+      } else {
+        const targetRef = doc(db, 'lists', target)
+        const targetSnap = await tx.get(targetRef)
+        if (!targetSnap.exists()) throw new Error('اللائحة الوجهة غير موجودة')
+        const t = targetSnap.data()
+        if (t.archived === true) throw new Error('لا يمكن النقل إلى لائحة مؤرشفة')
+        const targetUsed = Number(t.usedQty) || 0
+        const remaining = (Number(t.quantity) || 0) - targetUsed
+        if (qty > remaining) {
+          capacityError = `تم بلوغ الحدّ الأقصى للائحة الوجهة — الباقي ${remaining} فقط`
+          return
+        }
+        tx.update(entryRef, { listId: target })
+        tx.update(targetRef, { usedQty: targetUsed + qty })
+      }
+
+      if (sourceSnap.exists()) tx.update(sourceRef, { usedQty: Math.max(0, sourceUsed - qty) })
+    })
+    if (capacityError) return { error: capacityError }
+    return { error: null }
+  } catch (err) {
+    console.error('Error transferring list entry:', err)
+    return { error: err?.message || 'حدث خطأ أثناء نقل العميل' }
+  }
+}
+
 export async function deleteListEntry(entry) {
   try {
     await runTransaction(db, async (tx) => {

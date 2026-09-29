@@ -11,6 +11,7 @@ import {
   deleteListEntry,
   setListArchived,
   setListEntryConfirmed,
+  transferListEntry,
   updateList,
   updateListEntry,
 } from '../services/lists'
@@ -22,6 +23,7 @@ import ListForm from '../components/ListForm'
 import ListEntryForm from '../components/ListEntryForm'
 import ListEntriesTable from '../components/ListEntriesTable'
 import NotifyClientsDialog from '../components/NotifyClientsDialog'
+import TransferEntryDialog, { HOME_TARGET } from '../components/TransferEntryDialog'
 import Modal from '../components/ui/Modal'
 import Button from '../components/ui/Button'
 import Fab from '../components/Fab'
@@ -39,6 +41,7 @@ export default function Lists() {
   const [showAddEntry, setShowAddEntry] = useState(false)
   const [editingEntry, setEditingEntry] = useState(null)
   const [smsEntry, setSmsEntry] = useState(null)
+  const [transferEntry, setTransferEntry] = useState(null)
 
   const activeList = useMemo(() => lists.find((l) => l.id === activeListId) || null, [lists, activeListId])
   const { entries, loading: entriesLoading } = useListEntries(activeListId)
@@ -117,6 +120,22 @@ export default function Lists() {
         : [],
     [smsEntry, currentPrice],
   )
+
+  const handleTransferEntry = async (target) => {
+    if (!transferEntry) return false
+    const { error } = await transferListEntry(transferEntry, target, currentPrice, user)
+    if (error) {
+      toast(error, 'error')
+      return false
+    }
+    const targetList = lists.find((l) => l.id === target)
+    const dest =
+      target === HOME_TARGET
+        ? 'الصفحة الرئيسية'
+        : `«${targetList?.title || formatDate(targetList?.date)}»`
+    toast(`تم نقل «${transferEntry.clientName}» إلى ${dest}`, 'success')
+    return true
+  }
 
   const handleDeleteEntry = async (entry) => {
     const ok = await confirm({
@@ -246,6 +265,7 @@ export default function Lists() {
               onEdit={setEditingEntry}
               onDelete={handleDeleteEntry}
               onSms={setSmsEntry}
+              onTransfer={setTransferEntry}
               onConfirm={handleConfirmEntry}
             />
           </div>
@@ -256,6 +276,14 @@ export default function Lists() {
         isOpen={Boolean(smsEntry)}
         onClose={() => setSmsEntry(null)}
         orders={smsRecipients}
+      />
+
+      <TransferEntryDialog
+        entry={transferEntry}
+        currentList={activeList}
+        lists={lists}
+        onClose={() => setTransferEntry(null)}
+        onSave={handleTransferEntry}
       />
 
       <Modal isOpen={showAddEntry} onClose={() => setShowAddEntry(false)} title="إضافة عميل" icon={UserPlus} size="sm">

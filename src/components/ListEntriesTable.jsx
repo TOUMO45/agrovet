@@ -1,4 +1,4 @@
-import { AlertTriangle, Check, MessageSquare, Pencil, Phone, Trash2 } from 'lucide-react'
+import { AlertTriangle, ArrowRightLeft, Check, MessageSquare, Pencil, Phone, Trash2 } from 'lucide-react'
 import IconButton from './ui/IconButton'
 import { formatDate, formatDZD, formatInt } from '../utils/format'
 import { isValidDzMobile, toLocal } from '../utils/phone'
@@ -58,9 +58,9 @@ function ConfirmToggle({ entry, onConfirm }) {
   )
 }
 
-function Actions({ entry, onEdit, onDelete, onSms, vertical }) {
+function Actions({ entry, onEdit, onDelete, onSms, onTransfer, vertical }) {
   return (
-    <div className={`flex ${vertical ? 'flex-col' : 'items-center justify-center'} gap-0.5`}>
+    <div className={vertical ? 'grid shrink-0 grid-cols-2 gap-0.5' : 'flex items-center justify-center gap-0.5'}>
       <IconButton
         icon={MessageSquare}
         tone="brand"
@@ -70,6 +70,15 @@ function Actions({ entry, onEdit, onDelete, onSms, vertical }) {
         disabled={!isValidDzMobile(entry.phoneNumber)}
         className="disabled:pointer-events-none disabled:opacity-30"
       />
+      {onTransfer && (
+        <IconButton
+          icon={ArrowRightLeft}
+          tone="info"
+          size="sm"
+          label="نقل العميل إلى الرئيسية أو لائحة أخرى"
+          onClick={() => onTransfer(entry)}
+        />
+      )}
       <IconButton icon={Pencil} size="sm" label="تعديل العميل" onClick={() => onEdit(entry)} />
       <IconButton
         icon={Trash2}
@@ -96,6 +105,7 @@ export default function ListEntriesTable({
   onEdit,
   onDelete,
   onSms,
+  onTransfer,
   onConfirm,
 }) {
   const confirmHandler = readOnly ? null : onConfirm
@@ -122,7 +132,7 @@ export default function ListEntriesTable({
                   <th className="w-24 text-left">الكمية</th>
                   <th className="w-32 text-left">الإجمالي</th>
                   <th className="w-32">التاريخ</th>
-                  {!readOnly && <th className="w-28 text-center">إجراءات</th>}
+                  {!readOnly && <th className="w-36 text-center">إجراءات</th>}
                 </tr>
               </thead>
               <tbody>
@@ -154,7 +164,13 @@ export default function ListEntriesTable({
                     {!readOnly && (
                       <td>
                         <div className="opacity-80 transition-opacity group-hover:opacity-100">
-                          <Actions entry={entry} onEdit={onEdit} onDelete={onDelete} onSms={onSms} />
+                          <Actions
+                            entry={entry}
+                            onEdit={onEdit}
+                            onDelete={onDelete}
+                            onSms={onSms}
+                            onTransfer={onTransfer}
+                          />
                         </div>
                       </td>
                     )}
@@ -176,7 +192,7 @@ export default function ListEntriesTable({
                   <p className="truncate text-[13px] font-medium text-fg">{entry.clientName}</p>
                   <p className="tnum mt-0.5 flex items-center gap-2 text-[11px] text-fg-mute">
                     {entry.phoneNumber ? <PhoneLink value={entry.phoneNumber} small /> : null}
-                    <span>{formatDate(entry.date)}</span>
+                    <span className="whitespace-nowrap">{formatDate(entry.date)}</span>
                   </p>
                 </div>
                 <div className="tnum shrink-0 text-left">
@@ -186,7 +202,14 @@ export default function ListEntriesTable({
                   </p>
                 </div>
                 {!readOnly && (
-                  <Actions entry={entry} onEdit={onEdit} onDelete={onDelete} onSms={onSms} vertical />
+                  <Actions
+                    entry={entry}
+                    onEdit={onEdit}
+                    onDelete={onDelete}
+                    onSms={onSms}
+                    onTransfer={onTransfer}
+                    vertical
+                  />
                 )}
               </li>
             ))}
